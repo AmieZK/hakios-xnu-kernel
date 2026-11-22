@@ -36,6 +36,7 @@ jobs:
           CONFIG_CMD_HAKIOS=y
           CONFIG_BOOTMENU=y
           CONFIG_CMD_BMP=y
+          CONFIG_ENV_DEFAULT_ENV_TEXT_FILE="board/hakios.env"
           EOF
           make -C uefi/build/u-boot-qemu-src -s O=../u-boot-qemu \
             CROSS_COMPILE=aarch64-linux-gnu- qemu_arm64_defconfig
