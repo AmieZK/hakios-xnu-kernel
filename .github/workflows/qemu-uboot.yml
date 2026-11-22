@@ -1,0 +1,71 @@
+name: HakiOS QEMU U-Boot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout HakiOS UEFI repo
+        uses: actions/checkout@v4
+        with:
+          repository: AmieZK/hakios-uefi
+          ref: main
+          path: uefi
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-arm qemu-efi-aarch64 python3 \
+            gcc-aarch64-linux-gnu bison flex libssl-dev libgnutls28-dev
+
+      - name: Build U-Boot for QEMU
+        run: |
+          mkdir -p logs
+          uefi/u-boot/apply.sh qemu/qemu
+          cat >> uefi/build/u-boot-qemu-src/configs/qemu_arm64_defconfig <<'EOF'
+          CONFIG_EFI_LOADER=y
+          CONFIG_CMD_BOOTEFI=y
+          CONFIG_LMB=y
+          CONFIG_CMD_HAKIOS=y
+          CONFIG_BOOTMENU=y
+          CONFIG_CMD_BMP=y
+          CONFIG_ENV_USE_DEFAULT_ENV_TEXT_FILE=y
+          CONFIG_ENV_DEFAULT_ENV_TEXT_FILE="board/hakios.env"
+          EOF
+          make -C uefi/build/u-boot-qemu-src -s O=../u-boot-qemu \
+            CROSS_COMPILE=aarch64-linux-gnu- qemu_arm64_defconfig
+          make -C uefi/build/u-boot-qemu-src -s O=../u-boot-qemu \
+            CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc)
+
+      - name: Build payload from prebuilt kernel
+        run: |
+          python3 xnuloader/mkpayload.py -o qemu/payload.bin \
+            kernel=prebuilt/hakios-kernel \
+            ramdisk=prebuilt/userland/hello \
+            --cmdline "cpus=1"
+
+      - name: Run QEMU with U-Boot
+        run: |
+          set -o pipefail
+          export QEMU_U_BOOT=../uefi/build/u-boot-qemu/u-boot.bin
+          DTB=$(find uefi/build/u-boot-qemu uefi/build/u-boot-qemu-src -name '*.dtb' 2>/dev/null | head -1)
+          echo "DTB=$DTB"
+          timeout 90 bash qemu/run-u-boot.sh 60 -dtb "$(realpath "$DTB")" 2>&1 | tee logs/qemu-u-boot.log
+
+      - name: Publish log
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan qemu-uboot-log
+          cp logs/qemu-u-boot.log ./qemu-u-boot.log || true
+          git add -f qemu-u-boot.log || true
+          git commit -m "QEMU U-Boot run log" || true
+          git push -f origin qemu-uboot-log

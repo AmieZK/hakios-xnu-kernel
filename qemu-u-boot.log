@@ -1,0 +1,1 @@
+qemu-system-aarch64: qemu_fdt_getprop: Couldn't get //#address-cells: FDT_ERR_NOTFOUND
