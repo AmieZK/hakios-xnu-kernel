@@ -55,7 +55,7 @@ jobs:
         run: |
           set -o pipefail
           export QEMU_U_BOOT=../uefi/build/u-boot-qemu/u-boot.bin
-          DTB=$(find uefi/build/u-boot-qemu -name 'qemu-virt*.dtb' | head -1)
+          DTB=$(find uefi/build/u-boot-qemu uefi/build/u-boot-qemu-src -name '*.dtb' 2>/dev/null | head -1)
           echo "DTB=$DTB"
           timeout 90 bash qemu/run-u-boot.sh 60 -dtb "$(realpath "$DTB")" 2>&1 | tee logs/qemu-u-boot.log
 
