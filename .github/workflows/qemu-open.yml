@@ -1,0 +1,41 @@
+name: HakiOS QEMU open
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-arm qemu-efi-aarch64 python3
+
+      - name: Build payload from prebuilt kernel and loader
+        run: |
+          python3 xnuloader/mkpayload.py -o qemu/payload.bin \
+            kernel=prebuilt/hakios-kernel \
+            ramdisk=prebuilt/userland/hello \
+            --cmdline "cpus=1"
+
+      - name: Run QEMU
+        run: |
+          mkdir -p logs
+          timeout 90 bash qemu/run.sh 60 | tee logs/qemu-open.log
+
+      - name: Publish log
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan qemu-log
+          cp logs/qemu-open.log ./qemu-open.log || true
+          git add -f qemu-open.log
+          git commit -m "QEMU open run log"
+          git push -f origin qemu-log
