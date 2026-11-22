@@ -1,0 +1,40 @@
+name: HakiOS QEMU U-Boot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout HakiOS UEFI repo
+        uses: actions/checkout@v4
+        with:
+          repository: oosexgang/hakios-uefi
+          path: uefi
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-arm qemu-efi-aarch64 python3 \
+            gcc-aarch64-linux-gnu bison flex libssl-dev libgnutls28-dev
+
+      - name: Run QEMU with U-Boot
+        run: make qemu-u-boot SECS=60 2>&1 | tee logs/qemu-u-boot-console.log
+
+      - name: Publish log
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan qemu-uboot-log
+          cp logs/qemu-u-boot.log ./qemu-u-boot.log || true
+          cp logs/qemu-u-boot-console.log ./qemu-u-boot-console.log || true
+          git add -f qemu-u-boot.log qemu-u-boot-console.log || true
+          git commit -m "QEMU U-Boot run logs" || true
+          git push -f origin qemu-uboot-log
